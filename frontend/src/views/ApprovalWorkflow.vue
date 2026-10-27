@@ -25,10 +25,14 @@
         style="margin-bottom: 16px"
       />
 
+      <el-alert v-if="route.query.reservation_id" :title="`正在查看工单 #${route.query.reservation_id} 的审批待办`" type="info" :closable="false" style="margin-bottom: 12px">
+        <span v-if="!loading && !focusedPendingList.length">该工单已处理或不在当前角色的待办中。</span>
+        <el-button link type="primary" @click="router.replace('/approvals')">显示全部待办</el-button>
+      </el-alert>
       <el-tabs v-model="activeTab" @tab-click="handleTabClick">
         <!-- 选项卡 1：待我审批 -->
         <el-tab-pane :label="`待我审批待办 (${pendingList.length})`" name="pending">
-          <el-table :data="pendingList" style="width: 100%" v-loading="loading">
+          <el-table :data="focusedPendingList" style="width: 100%" v-loading="loading">
             <el-table-column prop="experiment_name" label="实验课题名称" min-width="180" />
             
             <el-table-column prop="equipment_name" label="预约设备" min-width="180" />
@@ -155,14 +159,18 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import request from '../api/request'
 import { Stamp, Refresh } from '@element-plus/icons-vue'
 
 const authStore = useAuthStore()
+const route = useRoute()
+const router = useRouter()
 
 const activeTab = ref('pending')
 const pendingList = ref([])
+const focusedPendingList = computed(() => route.query.reservation_id ? pendingList.value.filter(row => String(row.id) === String(route.query.reservation_id)) : pendingList.value)
 const historyList = ref([])
 const loading = ref(false)
 const historyLoading = ref(false)
@@ -187,6 +195,13 @@ const roleName = computed(() => {
 watch(() => authStore.role, () => {
   fetchPendingList()
   fetchHistoryList()
+})
+
+watch(() => route.query.reservation_id, id => {
+  if (id) {
+    activeTab.value = 'pending'
+    fetchPendingList()
+  }
 })
 
 const fetchPendingList = async () => {

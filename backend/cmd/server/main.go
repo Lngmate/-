@@ -36,10 +36,15 @@ func main() {
 	credCtrl := &controllers.CreditController{}
 	statCtrl := &controllers.StatsController{}
 	notifCtrl := &controllers.NotificationController{}
+	taskCtrl := &controllers.TaskController{}
 
 	// API 路由定义
 	api := r.Group("/api")
 	{
+		tasks := api.Group("/tasks").Use(middleware.AuthRequired())
+		tasks.GET("", taskCtrl.List)
+		tasks.POST("/preview", taskCtrl.Preview)
+		tasks.POST("", taskCtrl.Create)
 		// 1. 认证模块
 		auth := api.Group("/auth")
 		{
@@ -84,7 +89,8 @@ func main() {
 		reservations := api.Group("/reservations").Use(middleware.AuthRequired())
 		{
 			reservations.GET("", resCtrl.List)
-			reservations.GET("/events", resCtrl.CalendarEvents) // FullCalendar 事件流
+			reservations.GET("/:id", resCtrl.Detail)
+			reservations.GET("/events", resCtrl.CalendarEvents)        // FullCalendar 事件流
 			reservations.POST("/check", resCtrl.CheckConflictAndBatch) // 冲突与伴热拼单即时检测
 			reservations.POST("", resCtrl.Create)
 			reservations.POST("/:id/cancel", resCtrl.Cancel)     // 主动取消预约

@@ -40,6 +40,7 @@ func InitDB(cfg *config.Config) *gorm.DB {
 	err = DB.AutoMigrate(
 		&models.User{},
 		&models.Equipment{},
+		&models.ExperimentTask{},
 		&models.Reservation{},
 		&models.ResearchGroup{},
 		&models.TransactionRecord{},
@@ -691,13 +692,13 @@ func seedData() {
 		CreatedAt:     now,
 	}
 	t2 := models.TransactionRecord{
-		GroupID:       g1.ID,
-		GroupName:     g1.Name,
-		Amount:        10000.0,
-		BalanceAfter:  35000.0,
-		Type:          "recharge",
-		Description:   "先进材料国家重点实验室年度科研机时补贴",
-		CreatedAt:     now.AddDate(0, 0, -10),
+		GroupID:      g1.ID,
+		GroupName:    g1.Name,
+		Amount:       10000.0,
+		BalanceAfter: 35000.0,
+		Type:         "recharge",
+		Description:  "先进材料国家重点实验室年度科研机时补贴",
+		CreatedAt:    now.AddDate(0, 0, -10),
 	}
 	DB.Create(&t1)
 	DB.Create(&t2)
