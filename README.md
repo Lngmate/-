@@ -152,7 +152,11 @@ lab-reservation-system/
 
 ## 六、 快速启动指南
 
+新增“实验任务”入口，支持2至3台设备的顺序工序排程、最短间隔、时间线预览和整单提交。使用方法、算法及一致性边界见 [多设备实验任务预约](backend/TASK_SCHEDULING.md)。
+
 ### 1. 启动后端服务 (Go)
+请先安装 Go 1.21 或以上版本，并确保 `go version` 可以执行。启动脚本优先使用系统 Go，也兼容项目内的 `go/bin/go.exe`。
+
 双击运行根目录下的 `start_backend.bat`，或在命令行中运行：
 ```bash
 cd backend
@@ -163,9 +167,12 @@ go run cmd/server/main.go
 后端默认监听 `:8080` 端口，自动创建 SQLite 数据库 `lab_system.db` 并自动填充 16 台设备及全部预置账号。
 
 ### 2. 启动前端服务 (Vue 3)
+请先安装 Node.js 18 或以上版本（建议使用 Node.js 22）。首次启动需要安装前端依赖，根目录启动脚本会自动执行此步骤；手动启动时请先执行 `npm ci`。
+
 双击运行根目录下的 `start_frontend.bat`，或在命令行中运行：
 ```bash
 cd frontend
+npm ci
 npm run dev
 ```
 打开浏览器访问：`http://localhost:5173` 即可进入系统。未登录用户将自动跳转至登录页。

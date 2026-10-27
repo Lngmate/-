@@ -21,6 +21,10 @@
         </div>
       </template>
 
+      <el-alert v-if="route.query.reservation_id" :title="`正在查看工单 #${route.query.reservation_id}`" type="info" :closable="false" style="margin-bottom: 12px">
+        <el-button link type="primary" @click="router.replace('/my-reservations')">显示全部预约</el-button>
+      </el-alert>
+      <el-alert v-if="loadError" :title="loadError" type="error" :closable="false" style="margin-bottom: 12px" />
       <el-table :data="filteredReservations" style="width: 100%" v-loading="loading">
         <el-table-column prop="equipment_name" label="实验设备" min-width="180">
           <template #default="{ row }">
@@ -31,7 +35,12 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="experiment_name" label="实验课题名称" min-width="180" />
+        <el-table-column prop="experiment_name" label="实验课题名称" min-width="180">
+          <template #default="{ row }">
+            <div>{{ row.experiment_name }}</div>
+            <el-link v-if="row.task_id" type="primary" href="/experiment-tasks">任务 #{{ row.task_id }} · 工序 {{ row.task_step }}</el-link>
+          </template>
+        </el-table-column>
 
         <el-table-column label="预约时间段" min-width="220">
           <template #default="{ row }">
@@ -71,6 +80,7 @@
 
         <el-table-column label="现场履约操作" width="220" fixed="right">
           <template #default="{ row }">
+            <el-button link type="primary" size="small" @click="showReservationDetail(row)">详情</el-button>
             <!-- 待履约 -> 现场扫码/输入签到码上机 -->
             <el-button
               v-if="row.status === 'approved'"
@@ -119,6 +129,8 @@
         </el-table-column>
       </el-table>
     </el-card>
+
+    <ReservationDetailDialog v-model="reservationDetailVisible" :reservation-id="detailReservationId" />
 
     <!-- 签到核销对话框 -->
     <el-dialog v-model="checkinVisible" title="实验室现场上机签到核销" width="480px" destroy-on-close>
@@ -195,12 +207,23 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import ReservationDetailDialog from '../components/ReservationDetailDialog.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '../api/request'
 import { Document, Refresh, Tickets, Cpu } from '@element-plus/icons-vue'
 
 const reservations = ref([])
+const route = useRoute()
+const router = useRouter()
+const loadError = ref('')
+const reservationDetailVisible = ref(false)
+const detailReservationId = ref(null)
+const showReservationDetail = row => {
+  detailReservationId.value = row.id
+  reservationDetailVisible.value = true
+}
 const loading = ref(false)
 const statusFilter = ref('')
 
@@ -215,58 +238,20 @@ const checkoutForm = ref({ condition: '实验完成，腔体已清洁，已恢�
 
 const fetchReservations = async () => {
   loading.value = true
+  loadError.value = ''
   try {
     const res = await request.get('/reservations', { params: { scope: 'my' } })
     if (res.data) reservations.value = res.data
   } catch (err) {
-    // 模拟数据
-    reservations.value = [
-      {
-        id: 1,
-        equipment_name: '超临界流体色谱-质谱联用仪(SFC-MS)',
-        equipment_model: 'Waters ACQUITY UPC2',
-        experiment_name: '手性药物异构体纯化与质谱定性',
-        start_time: new Date().toISOString(),
-        end_time: new Date(Date.now() + 3600000 * 3).toISOString(),
-        duration_hours: 3.0,
-        status: 'active',
-        total_cost: 600,
-        checkin_code: '849201',
-        is_batched: false
-      },
-      {
-        id: 2,
-        equipment_name: '超高温真空气氛管式炉',
-        equipment_model: 'NBD-T1700-60IT',
-        experiment_name: '二维过渡金属硫族化物CVD高温气相沉积',
-        start_time: new Date(Date.now() + 3600000 * 4).toISOString(),
-        end_time: new Date(Date.now() + 3600000 * 7).toISOString(),
-        duration_hours: 3.0,
-        status: 'pending_admin',
-        total_cost: 127.5,
-        checkin_code: '392817',
-        is_batched: true
-      },
-      {
-        id: 3,
-        equipment_name: '场发射扫描电子显微镜(FE-SEM)',
-        equipment_model: 'JEOL JSM-7800F',
-        experiment_name: '石墨烯基催化剂微观形貌与EDS元素分析',
-        start_time: new Date(Date.now() + 86400000).toISOString(),
-        end_time: new Date(Date.now() + 86400000 + 7200000).toISOString(),
-        duration_hours: 2.0,
-        status: 'approved',
-        total_cost: 360,
-        checkin_code: '628190',
-        is_batched: false
-      }
-    ]
+    reservations.value = []
+    loadError.value = err.response?.data?.message || '读取预约失败，请刷新重试'
   } finally {
     loading.value = false
   }
 }
 
 const filteredReservations = computed(() => {
+  if (route.query.reservation_id) return reservations.value.filter(r => String(r.id) === String(route.query.reservation_id))
   if (!statusFilter.value) return reservations.value
   return reservations.value.filter(r => r.status === statusFilter.value)
 })
@@ -373,6 +358,8 @@ const getStatusTag = (status) => {
 onMounted(() => {
   fetchReservations()
 })
+
+watch(() => route.query.reservation_id, () => { statusFilter.value = ''; fetchReservations() })
 </script>
 
 <style scoped>

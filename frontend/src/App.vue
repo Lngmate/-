@@ -21,6 +21,7 @@
       <div class="header-right">
         <!-- 核心新功能：站内实时消息与醒目红点提示 (QQ/微信风格提醒) -->
         <el-popover
+          v-model:visible="notifPopoverVisible"
           placement="bottom-end"
           :width="400"
           trigger="click"
@@ -96,7 +97,7 @@
                     <div class="ni-action-bar">
                       <span v-if="!item.is_read" class="unread-tag">NEW</span>
                       <span class="jump-hint">
-                        {{ item.type === 'reservation_pending' ? '去处理审批 ➔' : '查看工单详情 ➔' }}
+                        {{ item.related_id ? '查看工单详情 ➔' : '查看通知 ➔' }}
                       </span>
                     </div>
                   </div>
@@ -174,6 +175,11 @@
             <span>设备大厅 & 2D地图</span>
           </el-menu-item>
 
+          <el-menu-item index="/experiment-tasks">
+            <el-icon><Connection /></el-icon>
+            <span>实验任务</span>
+          </el-menu-item>
+
           <el-menu-item index="/calendar">
             <el-icon><Calendar /></el-icon>
             <span>可视化日历排期</span>
@@ -230,6 +236,12 @@
         <router-view />
       </main>
     </div>
+
+    <ReservationDetailDialog v-model="notificationDetailVisible" :reservation-id="notificationReservationId" />
+    <el-dialog v-model="noticeVisible" title="通知详情" width="min(520px, 92vw)">
+      <h3>{{ selectedNotice?.title }}</h3>
+      <p class="notice-content">{{ selectedNotice?.content }}</p>
+    </el-dialog>
 
     <!-- 个人资料编辑弹窗 -->
     <el-dialog v-model="profileDialogVisible" title="个人资料设置" width="460px" destroy-on-close>
@@ -290,6 +302,7 @@ import {
   DataBoard,
   Location,
   Calendar,
+  Connection,
   Tickets,
   Stamp,
   Money,
@@ -300,6 +313,7 @@ import {
   Bell
 } from '@element-plus/icons-vue'
 import { getNotifications, markAsRead, markAllAsRead } from './api/notification'
+import ReservationDetailDialog from './components/ReservationDetailDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -331,6 +345,11 @@ const getRoleAvatarColor = (role) => {
 
 // ---------------- 站内消息与红点通知逻辑 ----------------
 const notifList = ref([])
+const notifPopoverVisible = ref(false)
+const notificationDetailVisible = ref(false)
+const notificationReservationId = ref(null)
+const noticeVisible = ref(false)
+const selectedNotice = ref(null)
 const unreadNotifCount = ref(0)
 let lastUnreadCount = 0
 let notifTimer = null
@@ -362,7 +381,8 @@ const fetchNotifications = async (triggerToast = false) => {
             message: latest.content,
             type: latest.type === 'reservation_approved' ? 'success' : (latest.type === 'reservation_rejected' ? 'warning' : 'primary'),
             duration: 6000,
-            position: 'top-right'
+            position: 'top-right',
+            onClick: () => handleNotifClick(latest)
           })
         }
       }
@@ -376,6 +396,14 @@ const fetchNotifications = async (triggerToast = false) => {
 }
 
 const handleNotifClick = async (item) => {
+  notifPopoverVisible.value = false
+  if (item.related_id) {
+    notificationReservationId.value = item.related_id
+    notificationDetailVisible.value = true
+  } else {
+    selectedNotice.value = item
+    noticeVisible.value = true
+  }
   if (!item.is_read) {
     try {
       await markAsRead(item.id)
@@ -389,12 +417,6 @@ const handleNotifClick = async (item) => {
     }
   }
 
-  // 根据通知类型智能跳转到对应模块
-  if (item.type === 'reservation_pending') {
-    router.push('/approvals')
-  } else if (item.type === 'reservation_approved' || item.type === 'reservation_rejected' || item.type === 'reservation_cancel') {
-    router.push('/my-reservations')
-  }
 }
 
 const handleReadAllNotifs = async () => {
@@ -909,9 +931,12 @@ body {
 
 .app-main {
   flex: 1;
+  min-width: 0;
   padding: 24px;
   overflow-y: auto;
 }
+
+.notice-content { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
 
 .user-dropdown-menu .dropdown-header {
   padding: 10px 16px;

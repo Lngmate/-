@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"lab-reservation-system/database"
@@ -16,14 +15,33 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var equipmentLocks sync.Map
-
-func getEquipmentLock(equipmentID uint) *sync.Mutex {
-	val, _ := equipmentLocks.LoadOrStore(equipmentID, &sync.Mutex{})
-	return val.(*sync.Mutex)
-}
-
 type ReservationController struct{}
+
+// Detail permits the owner, administrators, and the group's advisor to read a work order.
+func (rc *ReservationController) Detail(c *gin.Context) {
+	var reservation models.Reservation
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil || id == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400, "message": "无效预约ID"})
+		return
+	}
+	if err := database.DB.First(&reservation, uint(id)).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"code": 404, "message": "预约工单不存在或已删除"})
+		return
+	}
+	var viewer models.User
+	if err := database.DB.First(&viewer, c.GetUint("user_id")).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": 401, "message": "用户不存在"})
+		return
+	}
+	canRead := reservation.UserID == viewer.ID || viewer.Role == models.RoleSystemAdmin || viewer.Role == models.RoleEquipmentAdmin ||
+		(viewer.Role == models.RoleAdvisor && viewer.GroupID != nil && *viewer.GroupID == reservation.GroupID)
+	if !canRead {
+		c.JSON(http.StatusForbidden, gin.H{"code": 403, "message": "您无权查看该预约工单"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"code": 200, "data": reservation})
+}
 
 // CreateReservationRequest 创建预约请求载荷
 type CreateReservationRequest struct {
@@ -80,9 +98,8 @@ func (rc *ReservationController) Create(c *gin.Context) {
 	}
 
 	// 高并发排期互斥锁：针对同一台仪器进行毫秒级加锁，彻底杜绝并发超约与重复排期
-	eqLock := getEquipmentLock(req.EquipmentID)
-	eqLock.Lock()
-	defer eqLock.Unlock()
+	unlock := services.LockEquipments([]uint{req.EquipmentID})
+	defer unlock()
 
 	userIDVal, _ := c.Get("user_id")
 	userID := userIDVal.(uint)
